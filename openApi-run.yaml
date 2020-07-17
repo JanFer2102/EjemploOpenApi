@@ -1,0 +1,323 @@
+openapi: 3.0.0
+
+info:
+  title: Api Inbound de Coa Autonomation
+  description: API description in Markdown.
+  version: 1.0.0
+host: verifisica-ko6eh66raa-uc.a.run.app
+schemes:
+  - https
+produces:
+  - application/json
+x-google-backend:
+   address: https://inbound-http-ko6eh66raa-uc.a.run.app
+   protocol: h2
+security:
+  - api_key: []
+paths:
+  /task:
+    post:
+      tags:
+        - Registra una Solicitud
+      summary: Recibe las solicitudes de verificación de domicilio.
+      operationId: task
+      description: |
+        Recibe, valida y registra las solicitudes de verificación de domicilio.
+      parameters:
+        - in: query
+          name: identificador_tareas
+          description: Determina el tipo de petición que se envía. Enviar 'verifisica'
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: datos
+          required: true
+          description: contiene el detalle de la información para realizar la  verificación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataVerifisica'
+        - in: query
+          name: options
+          description: se proporcionará la información adicional que se requiera para la atención de la solicitud enviada
+          required: true
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionsRequest'
+      responses:
+        '200':
+          description: La solicitud fue recibida
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerReceptionTaskItem'
+        '400':
+          description: No se puede recibir la solicitud por el error indicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceptionTaskItem'
+        description: Solicita aplicar el servicio de verificación física a la información enviada
+  /status/{uuid_task}:       
+    get:
+      tags:
+        - Consulta de solicitud
+      summary: Proporciona el estatus en que se encuentra una solicitud.
+      operationId: status
+      description: Este servicio se encarga de propocionar en tiempo real el estatus de una solicitud.
+      parameters:
+        - in: path
+          name: uuid_task
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Identificador único de la tarea de la que se desea obtener el estatus.
+      responses:
+        '200':
+          description: Consulta  realizada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: 
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum: [PENDIENTE, ATENDIENDO, APROBADA, RECHAZADA, ERROR, CANCELADA, CADUCADA]
+                    example: APROBADA
+                
+        '400':
+          description: 'La solicitud no es válida y no puede ser atendida.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /cancel/{uuid_task}:       
+    get:
+      tags:
+        - Cancelar  solicitud
+      summary: Cancela una solicitud previamente registrada
+      operationId: cancel
+      description: Intenta cancelar una solicitud previamente recibida. Aunque si la solicitud ya ha sido procesada, manda el estatus de la solicitud.
+      parameters:
+        - in: path
+          name: uuid_task
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: Identificador único de la tarea de la que se desea obtener el estatus.
+      responses:
+        '200':
+          description: La cancelación ha sido recibida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancelAnswer'
+          
+        '400':
+          description: 'La solicitud no es válida y no puede ser atendida.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    DataVerifisica:
+      type: object
+      required:
+        - latitude
+        - longitude
+        - addressPhotosNumber
+        - addressPhotos
+        - proofDocPhotosNumber
+        - proofDocPhotos
+        - riskLevel
+        - locationType
+        - market
+      properties:
+        latitude:
+          type: number
+          format: double
+          example: 19.3757141
+        longitude:
+          type: number
+          format: double
+          example: -99.2597687
+        addressPhotosNumber:
+          type: integer
+          minimum: 0
+          maximum: 10
+          example: 3
+        addressPhotos:
+          type: array
+          items: 
+             $ref: '#/components/schemas/PhotoItem'
+        proofDocPhotosNumber:
+          type: integer
+          minimum: 0
+          maximum: 10
+          example: 1
+        proofDocPhotos:
+          type: array
+          items: 
+             $ref: '#/components/schemas/DocPhotoItem'
+        riskLevel:
+          type: string
+          enum: [BAJO, MEDIO, ALTO]
+        locationType:
+          type: string
+          enum: [NEGOCIO, CASA]
+        market:
+          type: string
+          enum: [FORMAL, INFORMAL]
+
+    PhotoItem:
+      type: object
+      properties:
+        url:
+          type: string
+          example: 'https://www.independencia.com.mx/img/logoIndependencia.png'
+        date:
+          type: string
+          format: date-time
+          example: '1592658908'
+        latitude:
+          type: number
+          format: double
+          example: 19.3757141
+        longitude:
+          type: number
+          format: double
+          example: -99.2597687
+        tag:
+          type: string
+          enum: [FACHADA, SELFIE-FACHADA, SELFIE-DENTRO-CASA, DENTRO-CASA]
+          description: corresponde con el tipo de foto a que corresponde
+      required:
+        - url
+        - tag
+    DocPhotoItem:
+      type: object
+      properties:
+        url:
+          type: string
+          example: 'https://www.independencia.com.mx/img/logoIndependencia.png'
+        date:
+          type: string
+          format: date-time
+          example: '1592658908'
+        tag:
+          type: string
+          enum: [COMP-DOMICILIO, COMP-INE]
+          description: corresponde con el tipo de foto a que corresponde
+      required:
+        - url
+        - tag
+    ReceptionTaskItem:
+      type: object
+      required:
+        - task_identifier
+        - data
+        - callback
+      properties:
+        task_identifier:
+          type: string
+          example: 'verifisica'
+        data:
+          $ref: '#/components/schemas/DataVerifisica'
+        options:
+          $ref: '#/components/schemas/OptionsRequest'
+
+    AnswerReceptionTaskItem:
+      type: object
+      required:
+        - result
+        - success
+      properties:
+        result:
+          type: object
+          properties:
+            task_uuid:
+              type: string
+              format: uuid
+              description: identificador único de la tarea
+              example: d290f1ee-6c54-4b01-90e6-d701748f0851
+            created_at:
+              type: string
+              format: date-time
+              example: '1592658908'
+            sla-mins:
+              type: integer
+              example: 15
+        success:
+          type: boolean
+          example: true
+    Error:
+      type: object
+      required:
+        - error
+        - success
+      properties:
+        error:
+          type: string
+          description: Proporciona un mensaje con los problemas encontrados.
+          example: The given task request uuid [{uuid}] is already closed.
+        success:
+          type: boolean
+          example: false
+          description: Siempre es false para esta respuesta
+    CancelAnswer:
+      type: object
+      required:
+        - result
+        - success
+      properties:
+        result:
+          type: object
+          properties:
+            task_uuid:
+              type: string
+              format: uuid
+              description: identificador único de la tarea
+              example: d290f1ee-6c54-4b01-90e6-d701748f0851
+            status:
+              type: string
+              description: corresponde al estatus de la solicitud.
+              enum: [PENDIENTE, ATENDIENDO, APROBADA, RECHAZADA, ERROR, CANCELADA, CADUCADA]
+              example: CANCELADA
+        success:
+          type: boolean
+          example: true
+    OptionsRequest:
+      type: object
+      required:
+        - callback
+      properties:
+        callback:
+          type: string
+          description: Se espera recibir el url a la que se debe llamar para enviar la respuesta
+          example: 'https://inbound-http-ko6f666raa-uc.a.run.app/api/notify/{uuid-task,resultCode,latitude,longitude}'
+
+# [START securityDef]
+securityDefinitions:
+  # This section configures basic authentication with an API key.
+  api_key:
+    type: "apiKey"
+    name: "key"
+    in: "query"
+# [END securityDef]
+# Added by API Auto Mocking Plugin
+servers:
+# Added by API Auto Mocking Plugin
+  - description: SwaggerHub API Auto Mocking
+    url: https://verifisica-ko6eh66raa-uc.a.run.app
